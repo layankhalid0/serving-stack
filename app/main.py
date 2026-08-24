@@ -19,6 +19,7 @@ import uuid
 
 import torch
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from schemas import (
@@ -88,7 +89,7 @@ def list_models() -> ModelList:
 # ---------------------------------------------------------------------------
 # POST /v1/chat/completions  -- TODO (non-streaming first)
 # ---------------------------------------------------------------------------
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+@app.post("/v1/chat/completions")
 def chat_completions(req: ChatCompletionRequest) -> ChatCompletionResponse:
     """Run the model over the messages and return an OpenAI-compatible completion.
 
@@ -123,6 +124,39 @@ def chat_completions(req: ChatCompletionRequest) -> ChatCompletionResponse:
     Generation blocks the event loop this week. That is acceptable: week 3's
     engine owns concurrency. Name it, do not solve it here.
     """
+    if req.stream:
+        def generate_stream():
+            input_ids = tokenizer.apply_chat_template(
+                [m.model_dump() for m in req.messages],
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+
+            with torch.no_grad():
+                out = model.generate(
+                    input_ids,
+                    max_new_tokens=req.max_tokens,
+                    do_sample=req.temperature > 0,
+                    temperature=req.temperature if req.temperature > 0 else None,
+                )
+
+            new_tokens = out[0][input_ids.shape[1]:]
+
+            for token in new_tokens:
+                text = tokenizer.decode([token], skip_special_tokens=True)
+
+                if text:
+                    yield f"data: {text}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+        )
+
+   
+    
     if req.model != MODEL_ID:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="model_not_found")
