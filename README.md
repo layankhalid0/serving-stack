@@ -40,3 +40,12 @@ This repository is your code.
 
 Then read `setup.md`. It is short, and it covers the two things that go wrong:
 committing a key, and committing a model.
+
+
+## Docker image size comparison
+
+| stage/image | size |
+|---|---:|
+| naive build (full base, cached pip) | 2.95 GB |
+| your slim build | 1.26 GB |
+
