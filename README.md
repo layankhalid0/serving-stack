@@ -42,10 +42,25 @@ Then read `setup.md`. It is short, and it covers the two things that go wrong:
 committing a key, and committing a model.
 
 
-## Docker image size comparison
+## W2D3 Docker image size comparison
 
 | stage/image | size |
 |---|---:|
 | naive build (full base, cached pip) | 2.95 GB |
 | your slim build | 1.26 GB |
 
+
+
+
+## W2D4 Verification Evidence
+
+Colab GPU probe:
+OK:Tesla T4:31.9
+
+Local green-check verification:
+
+part 1: GPU image resolved
+part 2: /health 200 on CPU fallback
+part 3: colab evidence shows cuda: true
+
+GREEN CHECK: PASS
