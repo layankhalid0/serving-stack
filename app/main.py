@@ -18,7 +18,8 @@ import time
 import uuid
 
 import torch
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -34,8 +35,23 @@ from schemas import (
 )
 
 MODEL_ID = os.environ.get("MODEL_ID", "Qwen/Qwen2.5-0.5B-Instruct")
+API_KEY = os.environ.get("API_KEY", "")
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "256"))
+
+if not API_KEY:
+    print("WARNING: API_KEY is not set; /v1/* endpoints are running OPEN.")
 
 app = FastAPI(title="serving-stack", version="wk2")
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if request.url.path.startswith("/v1/") and API_KEY:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {API_KEY}":
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "unauthorized"},
+            )
+    return await call_next(request)
 
 # Load once at import time. CPU only this week.
 print(f"loading {MODEL_ID} on cpu ...")
@@ -91,6 +107,8 @@ def list_models() -> ModelList:
 # ---------------------------------------------------------------------------
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatCompletionRequest) -> ChatCompletionResponse:
+    req.max_tokens = min(req.max_tokens, MAX_TOKENS)
+
     """Run the model over the messages and return an OpenAI-compatible completion.
 
     Contract (non-streaming, the week-2 target):
